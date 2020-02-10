@@ -26,11 +26,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The permutation modules contains some functions for permuting on architectures given a mapping.
-
-A permutation function takes in a graph and a permutation of graph nodes,
-and returns a sequence of SWAPs that implements that permutation on the graph.
+"""The algorithms used in routing passes.
 """
 
-from .general import ApproximateTokenSwapper
-# from qiskit.transpiler.routing.types import Permutation, Swap
+from .token_swapper import ApproximateTokenSwapper
+from .token_swapper import swaps_to_permutation_circuit

@@ -34,8 +34,8 @@ import networkx as nx
 from numpy import random
 
 from qiskit.test import QiskitTestCase
-from qiskit.transpiler.routing import util
-from qiskit.transpiler.routing.general import ApproximateTokenSwapper
+from qiskit.transpiler.passes.routing.algorithms import ApproximateTokenSwapper
+from qiskit.transpiler.passes.routing.algorithms.token_swapper import swap_permutation
 
 
 class TestGeneral(QiskitTestCase):
@@ -53,7 +53,7 @@ class TestGeneral(QiskitTestCase):
 
         out = list(swapper.map(permutation))
         self.assertEqual(3, len(out))
-        util.swap_permutation([out], permutation)
+        swap_permutation([out], permutation)
         self.assertEqual({i: i for i in range(4)}, permutation)
 
     def test_small(self) -> None:
@@ -63,7 +63,7 @@ class TestGeneral(QiskitTestCase):
         swapper = ApproximateTokenSwapper(graph)  # type: ApproximateTokenSwapper[int]
 
         out = list(swapper.map(permutation))
-        util.swap_permutation([out], permutation)
+        swap_permutation([out], permutation)
         self.assertEqual({i: i for i in range(8)}, permutation)
 
     def test_bug1(self) -> None:
@@ -75,7 +75,7 @@ class TestGeneral(QiskitTestCase):
         swapper = ApproximateTokenSwapper(graph)  # type: ApproximateTokenSwapper[int]
 
         out = list(swapper.map(permutation))
-        util.swap_permutation([out], permutation)
+        swap_permutation([out], permutation)
         self.assertEqual({i: i for i in permutation}, permutation)
 
     def test_partial_simple(self) -> None:
@@ -85,7 +85,7 @@ class TestGeneral(QiskitTestCase):
         swapper = ApproximateTokenSwapper(graph)  # type: ApproximateTokenSwapper[int]
         out = list(swapper.map(mapping))
         self.assertEqual(3, len(out))
-        util.swap_permutation([out], mapping, allow_missing_keys=True)
+        swap_permutation([out], mapping, allow_missing_keys=True)
         self.assertEqual({3: 3}, mapping)
 
     def test_partial_small(self) -> None:
@@ -96,7 +96,7 @@ class TestGeneral(QiskitTestCase):
 
         out = list(swapper.map(permutation))
         self.assertEqual(5, len(out))
-        util.swap_permutation([out], permutation, allow_missing_keys=True)
+        swap_permutation([out], permutation, allow_missing_keys=True)
         self.assertEqual({i: i for i in permutation.values()}, permutation)
 
     def test_large_partial_random(self) -> None:
@@ -116,5 +116,5 @@ class TestGeneral(QiskitTestCase):
         mapping = dict(itertools.islice(permutation.items(), 0, size, 2))  # Drop every 2nd element.
 
         out = list(swapper.map(mapping, trials=40))
-        util.swap_permutation([out], mapping, allow_missing_keys=True)
+        swap_permutation([out], mapping, allow_missing_keys=True)
         self.assertEqual({i: i for i in mapping.values()}, mapping)

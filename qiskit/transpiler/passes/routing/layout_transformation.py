@@ -20,8 +20,8 @@ import numpy as np
 from qiskit.transpiler import Layout, CouplingMap
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
-from qiskit.transpiler.routing import util
-from qiskit.transpiler.routing.general import ApproximateTokenSwapper
+from qiskit.transpiler.passes.routing.algorithms import ApproximateTokenSwapper
+from qiskit.transpiler.passes.routing.algorithms import swaps_to_permutation_circuit
 
 
 class LayoutTransformation(TransformationPass):
@@ -56,7 +56,7 @@ class LayoutTransformation(TransformationPass):
         swaps = token_swapper.map(permutation, trials)
         # None of the swaps are guaranteed to be disjoint so we perform one swap every layer.
         parallel_swaps = [[swap] for swap in swaps]
-        self.permutation_circuit = util.circuit(parallel_swaps)
+        self.permutation_circuit = swaps_to_permutation_circuit(parallel_swaps)
 
     def run(self, dag):
         """Apply the specified partial permutation to the circuit.
