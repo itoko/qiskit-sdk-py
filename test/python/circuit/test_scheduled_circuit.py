@@ -85,16 +85,6 @@ class TestScheduledCircuit(QiskitTestCase):
         qc.h(1)
         sc = transpile(qc, self.backend_without_dt, scheduling_method='alap')
         self.assertAlmostEqual(sc.duration, 450610*self.dt)
-        self.assertEqual(sc.unit, 's')
-        self.assertEqual(sc.data[1][0].name, "delay")
-        self.assertAlmostEqual(sc.data[1][0].duration, 1.0e-7)
-        self.assertEqual(sc.data[1][0].unit, 's')
-        self.assertEqual(sc.data[2][0].name, "u2")
-        self.assertAlmostEqual(sc.data[2][0].duration, 160*self.dt)
-        self.assertEqual(sc.data[2][0].unit, 's')
-        self.assertEqual(sc.data[3][0].name, "delay")
-        self.assertAlmostEqual(sc.data[3][0].duration, 1.0e-4+1.0e-7)
-        self.assertEqual(sc.data[3][0].unit, 's')
         with self.assertRaises(QiskitError):
             assemble(sc, self.backend_without_dt)
 
@@ -250,32 +240,32 @@ class TestScheduledCircuit(QiskitTestCase):
         qc.delay(500, 1)
         qc.cx(0, 1)
         qc.h(1)
-        scheduled = transpile(qc,
-                              scheduling_method='alap',
-                              instruction_durations=[('h', None, 200), ('cx', [0, 1], 700)])
-        self.assertEqual(scheduled.bit_start_time(0), 300)
-        self.assertEqual(scheduled.bit_stop_time(0), 1200)
-        self.assertEqual(scheduled.bit_start_time(1), 500)
-        self.assertEqual(scheduled.bit_stop_time(1), 1400)
-        self.assertEqual(scheduled.bit_start_time(2), 0)
-        self.assertEqual(scheduled.bit_stop_time(2), 0)
-        self.assertEqual(scheduled.bit_start_time(0, 1), 300)
-        self.assertEqual(scheduled.bit_stop_time(0, 1), 1400)
+        sc = transpile(qc,
+                       scheduling_method='alap',
+                       instruction_durations=[('h', None, 200), ('cx', [0, 1], 700)])
+        self.assertEqual(sc.bit_start_time(0), 300)
+        self.assertEqual(sc.bit_stop_time(0), 1200)
+        self.assertEqual(sc.bit_start_time(1), 500)
+        self.assertEqual(sc.bit_stop_time(1), 1400)
+        self.assertEqual(sc.bit_start_time(2), 0)
+        self.assertEqual(sc.bit_stop_time(2), 0)
+        self.assertEqual(sc.bit_start_time(0, 1), 300)
+        self.assertEqual(sc.bit_stop_time(0, 1), 1400)
 
         qc.measure_all()
-        scheduled = transpile(qc,
-                              scheduling_method='alap',
-                              instruction_durations=[('h', None, 200), ('cx', [0, 1], 700),
-                                                     ('measure', None, 1000)])
-        q = scheduled.qubits
-        self.assertEqual(scheduled.bit_start_time(q[0]), 300)
-        self.assertEqual(scheduled.bit_stop_time(q[0]), 2400)
-        self.assertEqual(scheduled.bit_start_time(q[1]), 500)
-        self.assertEqual(scheduled.bit_stop_time(q[1]), 2400)
-        self.assertEqual(scheduled.bit_start_time(q[2]), 1400)
-        self.assertEqual(scheduled.bit_stop_time(q[2]), 2400)
-        self.assertEqual(scheduled.bit_start_time(*q), 300)
-        self.assertEqual(scheduled.bit_stop_time(*q), 2400)
-        c = scheduled.clbits
-        self.assertEqual(scheduled.bit_start_time(c[0]), 1400)
-        self.assertEqual(scheduled.bit_stop_time(c[0]), 2400)
+        sc = transpile(qc,
+                       scheduling_method='alap',
+                       instruction_durations=[('h', None, 200), ('cx', [0, 1], 700),
+                                              ('measure', None, 1000)])
+        q = sc.qubits
+        self.assertEqual(sc.bit_start_time(q[0]), 300)
+        self.assertEqual(sc.bit_stop_time(q[0]), 2400)
+        self.assertEqual(sc.bit_start_time(q[1]), 500)
+        self.assertEqual(sc.bit_stop_time(q[1]), 2400)
+        self.assertEqual(sc.bit_start_time(q[2]), 1400)
+        self.assertEqual(sc.bit_stop_time(q[2]), 2400)
+        self.assertEqual(sc.bit_start_time(*q), 300)
+        self.assertEqual(sc.bit_stop_time(*q), 2400)
+        c = sc.clbits
+        self.assertEqual(sc.bit_start_time(c[0]), 1400)
+        self.assertEqual(sc.bit_stop_time(c[0]), 2400)

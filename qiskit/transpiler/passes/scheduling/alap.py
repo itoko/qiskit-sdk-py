@@ -14,6 +14,8 @@
 from collections import defaultdict
 from typing import List
 
+from qiskit.circuit import Qubit, Clbit
+from qiskit.circuit.bit import Bit
 from qiskit.circuit.delay import Delay
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.basepasses import TransformationPass
@@ -57,18 +59,21 @@ class ALAPSchedule(TransformationPass):
         for creg in dag.cregs.values():
             new_dag.add_creg(creg)
 
-        qubit_time_available = defaultdict(int)
+        bit_time_available = defaultdict(int)
 
-        def pad_with_delays(qubits: List[int], until, unit) -> None:
-            """Pad idle time-slots in ``qubits`` with delays in ``unit`` until ``until``."""
-            for q in qubits:
-                if qubit_time_available[q] < until:
-                    idle_duration = until - qubit_time_available[q]
-                    new_dag.apply_operation_front(Delay(idle_duration, unit), [q], [])
+        def pad_with_delays(bits: List[Bit], until, unit) -> None:
+            """Pad idle time-slots in ``bits`` with delays in ``unit`` until ``until``."""
+            for b in bits:
+                if bit_time_available[b] < until:
+                    idle_duration = until - bit_time_available[b]
+                    new_dag.apply_operation_front(Delay(idle_duration, unit, isinstance(b, Qubit)),
+                                                  [b] if isinstance(b, Qubit) else [],
+                                                  [b] if isinstance(b, Clbit) else [])
 
         for node in reversed(list(dag.topological_op_nodes())):
-            start_time = max(qubit_time_available[q] for q in node.qargs)
-            pad_with_delays(node.qargs, until=start_time, unit=time_unit)
+            node_bits = node.qargs + node.cargs
+            start_time = max(bit_time_available[b] for b in node_bits)
+            pad_with_delays(node_bits, until=start_time, unit=time_unit)
 
             new_node = new_dag.apply_operation_front(node.op, node.qargs, node.cargs,
                                                      node.condition)
@@ -79,12 +84,13 @@ class ALAPSchedule(TransformationPass):
 
             stop_time = start_time + duration
             # update time table
-            for q in node.qargs:
-                qubit_time_available[q] = stop_time
+            for b in node_bits:
+                bit_time_available[b] = stop_time
 
-        working_qubits = qubit_time_available.keys()
-        circuit_duration = max(qubit_time_available[q] for q in working_qubits)
+        working_bits = bit_time_available.keys()
+        circuit_duration = max(bit_time_available[b] for b in working_bits)
         pad_with_delays(new_dag.qubits, until=circuit_duration, unit=time_unit)
+        pad_with_delays(new_dag.clbits, until=circuit_duration, unit=time_unit)
 
         new_dag.name = dag.name
         new_dag.duration = circuit_duration
