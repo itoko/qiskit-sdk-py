@@ -19,7 +19,7 @@ import warnings
 import numbers
 import multiprocessing as mp
 from collections import OrderedDict, defaultdict
-from typing import Union
+from typing import Union, List
 import numpy as np
 from qiskit.exceptions import QiskitError
 from qiskit.util import is_main_process
@@ -1991,14 +1991,13 @@ class QuantumCircuit:
 
         return self.append(Barrier(len(qubits)), qubits, [])
 
-    def delay(self, duration, qarg=None, unit='dt'):
-        """Apply :class:`~qiskit.circuit.Delay`. If qarg is None, applies to all qubits.
-        When applying to multiple qubits, delays with the same duration will be created.
+    def delay(self, duration: Union[int, float], bit: Union[Bit, int], unit: str = 'dt'):
+        """Apply :class:`~qiskit.circuit.Delay`. If bit is None, applies to all qubits.
 
         Args:
-            duration (int or float): duration of the delay.
-            qarg (Object): qubit argument to apply this delay.
-            unit (str): unit of the duration. Supported units: 's', 'ms', 'us', 'ns', 'ps', 'dt'.
+            duration: duration of the delay.
+            bit: Bit to apply this delay. An integer is interpreted as the index of ``self.qubits``.
+            unit: unit of the duration. Supported units: 's', 'ms', 'us', 'ns', 'ps', 'dt'.
                 Default is ``dt``, i.e. integer time unit depending on the target backend.
 
         Returns:
@@ -2008,28 +2007,16 @@ class QuantumCircuit:
             CircuitError: if arguments have bad format.
         """
         from .delay import Delay
-        qubits = []
-        if qarg is None:  # -> apply delays to all qubits
-            for q in self.qubits:
-                qubits.append(q)
+        bit = self.qubits[bit] if isinstance(bit, int) else bit
+        if isinstance(bit, Qubit):
+            on_qubit = True
+        elif isinstance(bit, Clbit):
+            on_qubit = False
         else:
-            if isinstance(qarg, QuantumRegister):
-                qubits.extend([qarg[j] for j in range(qarg.size)])
-            elif isinstance(qarg, list):
-                qubits.extend(qarg)
-            elif isinstance(qarg, (range, tuple)):
-                qubits.extend(list(qarg))
-            elif isinstance(qarg, slice):
-                qubits.extend(self.qubits[qarg])
-            else:
-                qubits.append(qarg)
-
-        instructions = InstructionSet()
-        for q in qubits:
-            inst = (Delay(duration, unit), [q], [])
-            self.append(*inst)
-            instructions.add(*inst)
-        return instructions
+            raise CircuitError("bit must be Qubit or Clbit.")
+        return self.append(Delay(duration, unit, on_qubit=on_qubit),
+                           [bit] if isinstance(bit, Qubit) else [],
+                           [bit] if isinstance(bit, Clbit) else [])
 
     def h(self, qubit):  # pylint: disable=invalid-name
         """Apply :class:`~qiskit.circuit.library.HGate`."""

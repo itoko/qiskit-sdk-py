@@ -21,7 +21,7 @@ from qiskit.circuit.instruction import Instruction
 class Delay(Instruction):
     """Do nothing and just delay/wait/idle for a specified duration."""
 
-    def __init__(self, duration, unit='dt'):
+    def __init__(self, duration, unit='dt', on_qubit=True):
         """Create new delay instruction."""
         if not isinstance(duration, (float, int)):
             raise CircuitError('Unsupported duration type.')
@@ -32,14 +32,14 @@ class Delay(Instruction):
         if unit not in {'s', 'ms', 'us', 'ns', 'ps', 'dt'}:
             raise CircuitError('Unknown unit %s is specified.' % unit)
 
-        super().__init__("delay", 1, 0, params=[duration], unit=unit)
+        if on_qubit:
+            super().__init__("delay", 1, 0, params=[duration], unit=unit)
+        else:
+            super().__init__("delay", 0, 1, params=[duration], unit=unit)
 
     def inverse(self):
         """Special case. Return self."""
         return self
-
-    def broadcast_arguments(self, qargs, cargs):
-        yield [qarg for sublist in qargs for qarg in sublist], []
 
     def c_if(self, classical, val):
         raise CircuitError('Conditional Delay is not yet implemented.')
