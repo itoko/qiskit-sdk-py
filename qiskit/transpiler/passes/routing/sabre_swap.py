@@ -17,7 +17,7 @@ from copy import deepcopy
 from itertools import cycle
 import numpy as np
 
-from qiskit.circuit.library.standard_gates import SwapGate
+from qiskit.circuit.library.standard_gates import SwapGate, CXGate
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.layout import Layout
@@ -64,7 +64,7 @@ class SabreSwap(TransformationPass):
     `arXiv:1809.02573 <https://arxiv.org/pdf/1809.02573.pdf>`_
     """
 
-    def __init__(self, coupling_map, heuristic='basic', seed=None):
+    def __init__(self, coupling_map, heuristic='basic', seed=None, use_bridge=True):
         r"""SabreSwap initializer.
 
         Args:
@@ -123,6 +123,7 @@ class SabreSwap(TransformationPass):
         self.seed = seed
         self.applied_gates = None
         self.qubits_decay = None
+        self.use_bridge = use_bridge
 
     def run(self, dag):
         """Run the SabreSwap pass on `dag`.
@@ -161,42 +162,26 @@ class SabreSwap(TransformationPass):
         front_layer = dag.front_layer()
         self.applied_gates = set()
         while front_layer:
-            execute_gate_list = []
-
             # Remove as many immediately applicable gates as possible
-            for node in front_layer:
-                if len(node.qargs) == 2:
-                    v0, v1 = node.qargs
-                    physical_qubits = (current_layout[v0], current_layout[v1])
-                    if physical_qubits in self.coupling_map.get_edges():
-                        execute_gate_list.append(node)
-                else:  # Single-qubit gates as well as barriers are free
-                    execute_gate_list.append(node)
+            executables = self._applicable_gates(front_layer, current_layout)
 
-            if execute_gate_list:
-                for node in execute_gate_list:
+            if executables:
+                for node in executables:
                     new_node = _transform_gate_for_layout(node, current_layout)
                     mapped_dag.apply_operation_back(new_node.op,
                                                     new_node.qargs,
                                                     new_node.cargs,
                                                     new_node.condition)
-                    front_layer.remove(node)
-                    self.applied_gates.add(node)
-                    for successor in dag.quantum_successors(node):
-                        if successor.type != 'op':
-                            continue
-                        if self._is_resolved(successor, dag):
-                            front_layer.append(successor)
-
                     if node.qargs:
                         self._reset_qubits_decay()
 
+                front_layer = self._update_front_layer(dag, front_layer, executables)
+
                 # Diagnostics
                 logger.debug('free! %s',
-                             [(n.name, n.qargs) for n in execute_gate_list])
+                             [(n.name, n.qargs) for n in executables])
                 logger.debug('front_layer: %s',
                              [(n.name, n.qargs) for n in front_layer])
-
                 continue
 
             # After all free gates are exhausted, heuristically find
@@ -214,8 +199,42 @@ class SabreSwap(TransformationPass):
                                               trial_layout,
                                               swap_qubits)
                 swap_scores[swap_qubits] = score
-            min_score = min(swap_scores.values())
-            best_swaps = [k for k, v in swap_scores.items() if v == min_score]
+
+            min_swap_score = min(swap_scores.values())
+
+            if self.use_bridge:
+                min_bridge_score = min_swap_score
+                brcx_cands = []
+                for node in front_layer:
+                    if node.op.name == "cx":
+                        c, t = (current_layout[q] for q in node.op.qargs)
+                        if self.coupling_map.distance(c, t) == 2:
+                            path = self.coupling_map.shortest_undirected_path(c, t)
+                            if len(path) != 3:
+                                raise Exception("Invalid path length. BUG!")
+                            brcx_cands.append((node, path))
+
+                brcx_scores = [self._score_heuristic(self.heuristic,
+                                                     front_layer,
+                                                     extended_set,
+                                                     current_layout,
+                                                     path) for (_, path) in brcx_cands]
+                min_brcx_scores, min_brcx = min(zip(brcx_scores, brcx_cands),
+                                                default=(min_swap_score, (None, None)))
+
+                if min_swap_score > min_brcx_scores:
+                    min_node, path = min_brcx
+                    # add bridge cnot gates
+                    q = canonical_register
+                    mapped_dag.apply_operation_back(CXGate(), [q[path[1]], q[path[2]]])
+                    mapped_dag.apply_operation_back(CXGate(), [q[path[0]], q[path[1]]])
+                    mapped_dag.apply_operation_back(CXGate(), [q[path[1]], q[path[2]]])
+                    mapped_dag.apply_operation_back(CXGate(), [q[path[0]], q[path[1]]])
+                    # update front layer
+                    front_layer = self._update_front_layer(dag, front_layer, [min_node])
+                    continue
+
+            best_swaps = [k for k, v in swap_scores.items() if v == min_swap_score]
             best_swaps.sort(key=lambda x: (x[0].index, x[1].index))
             best_swap = rng.choice(best_swaps)
             swap_node = DAGNode(op=SwapGate(), qargs=best_swap, type='op')
@@ -241,6 +260,28 @@ class SabreSwap(TransformationPass):
         self.property_set['final_layout'] = current_layout
 
         return mapped_dag
+
+    def _applicable_gates(self, front_layer, current_layout):
+        execute_gate_list = []
+        for node in front_layer:
+            if len(node.qargs) == 2:
+                physical_qubits = [current_layout[v] for v in node.qargs]
+                if self.coupling_map.distance(*physical_qubits) == 1:
+                    execute_gate_list.append(node)
+            else:  # Single-qubit gates as well as barriers are free
+                execute_gate_list.append(node)
+        return execute_gate_list
+
+    def _update_front_layer(self, dag, front_layer, executables):
+        news = set(front_layer)
+        for n in front_layer:
+            news |= set(dag.quantum_successors(n))
+        news -= set(executables)
+
+        for n in executables:
+            self.applied_gates.add(n)
+
+        return [n for n in news if n.type == 'op' and self._is_resolved(n, dag)]
 
     def _reset_qubits_decay(self):
         """Reset all qubit decay factors to 1 upon request (to forget about
@@ -327,7 +368,7 @@ class SabreSwap(TransformationPass):
             return first_cost + EXTENDED_SET_WEIGHT * second_cost
 
         elif heuristic == 'decay':
-            return max(self.qubits_decay[swap_qubits[0]], self.qubits_decay[swap_qubits[1]]) * \
+            return max([self.qubits_decay[q] for q in swap_qubits]) * \
                    self._score_heuristic('lookahead', front_layer, extended_set, layout)
 
         else:
