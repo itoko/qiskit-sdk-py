@@ -206,7 +206,7 @@ class SabreSwap(TransformationPass):
                 brcx_cands = []
                 for node in front_layer:
                     if node.op.name == "cx":
-                        c, t = (current_layout[q] for q in node.op.qargs)
+                        c, t = (current_layout[q] for q in node.qargs)
                         if self.coupling_map.distance(c, t) == 2:
                             path = self.coupling_map.shortest_undirected_path(c, t)
                             if len(path) != 3:
