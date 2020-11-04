@@ -203,7 +203,6 @@ class SabreSwap(TransformationPass):
             min_swap_score = min(swap_scores.values())
 
             if self.use_bridge:
-                min_bridge_score = min_swap_score
                 brcx_cands = []
                 for node in front_layer:
                     if node.op.name == "cx":
@@ -218,7 +217,7 @@ class SabreSwap(TransformationPass):
                                                      front_layer,
                                                      extended_set,
                                                      current_layout,
-                                                     path) for (_, path) in brcx_cands]
+                                                     path) - 1 for (_, path) in brcx_cands]
                 min_brcx_scores, min_brcx = min(zip(brcx_scores, brcx_cands),
                                                 default=(min_swap_score, (None, None)))
 
@@ -274,7 +273,7 @@ class SabreSwap(TransformationPass):
 
     def _update_front_layer(self, dag, front_layer, executables):
         news = set(front_layer)
-        for n in front_layer:
+        for n in executables:
             news |= set(dag.quantum_successors(n))
         news -= set(executables)
 
