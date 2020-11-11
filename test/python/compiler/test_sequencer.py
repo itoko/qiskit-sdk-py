@@ -54,7 +54,6 @@ class TestSequence(QiskitTestCase):
         expected = schedule(qc.decompose(), self.backend)
         self.assertEqual(actual, pad(expected))
 
-    @unittest.skip("not yet determined if delays on ancilla should be removed or not")
     def test_transpile_and_sequence_agree_with_schedule_for_circuits_without_measures(self):
         qc = QuantumCircuit(2, name="bell_without_measurement")
         qc.h(0)

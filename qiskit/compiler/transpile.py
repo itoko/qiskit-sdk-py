@@ -32,6 +32,7 @@ from qiskit.transpiler.basepasses import BasePass
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.instruction_durations import InstructionDurations, InstructionDurationsType
 from qiskit.transpiler.passes import ApplyLayout
+from qiskit.transpiler.passes.utils import RemoveDelaysOnIdleQubits
 from qiskit.transpiler.passmanager_config import PassManagerConfig
 from qiskit.transpiler.preset_passmanagers import (level_0_pass_manager,
                                                    level_1_pass_manager,
@@ -322,6 +323,9 @@ def _transpile_circuit(circuit_config_tuple: Tuple[QuantumCircuit, Dict]) -> Qua
         pass_manager = level_3_pass_manager(pass_manager_config)
     else:
         raise TranspilerError("optimization_level can range from 0 to 3.")
+
+    if pass_manager_config.scheduling_method:
+        pass_manager.append(RemoveDelaysOnIdleQubits())
 
     result = pass_manager.run(circuit, callback=transpile_config['callback'],
                               output_name=transpile_config['output_name'])
